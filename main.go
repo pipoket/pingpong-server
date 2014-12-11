@@ -1,56 +1,60 @@
 package main
 
+
 import (
-    "encoding/json"
-    "net/http"
-    "strings"
+    "log"
+    "net"
 )
 
 
-type weatherData struct {
-    Name string `json:"name"`
-    Main struct {
-        Kelvin float64 `json:"temp"`
-    } `json:"main"`
+type udpServer struct {
+    bindIp string
+    bindPort int
+    conn *net.UDPConn
 }
 
 
-func query(city string) (weatherData, error) {
-    resp, err := http.Get("http://api.openweathermap.org/data/2.5/weather?q=" + city)
+func (server *udpServer) Start() {
+    log.Printf("UDPServer::start")
+
+    addr := net.UDPAddr{
+        IP: net.ParseIP(server.bindIp),
+        Port: server.bindPort,
+    }
+
+    conn, err := net.ListenUDP("udp", &addr)
     if err != nil {
-        return weatherData{}, err
+        panic(err)
     }
+    server.conn = conn
+}
 
-    defer resp.Body.Close()
 
-    var d weatherData
-
-    if err := json.NewDecoder(resp.Body).Decode(&d); err != nil {
-        return weatherData{}, err
+func (server *udpServer) ServeForever() {
+    for {
+        var buffer [1024]byte
+        rlen, raddr, err := server.conn.ReadFrom(buffer[:])
+        if err != nil {
+            log.Printf("ERROR while reading")
+            return
+        }
+        server.HandlePacket(raddr, rlen, buffer[:])
     }
+}
 
-    return d, nil
+
+func (server *udpServer) HandlePacket(raddr net.Addr, rlen int, buffer []byte) {
+    go func(raddr net.Addr, rlen int, buffer []byte) {
+        log.Printf("Read %d bytes from %s", rlen, raddr.String())
+    }(raddr, rlen, buffer)
 }
 
 
 func main() {
-    http.HandleFunc("/hello", hello)
-    http.HandleFunc("/weather/", func(w http.ResponseWriter, r *http.Request) {
-        city := strings.SplitN(r.URL.Path, "/", 3)[2]
+    log.Printf("Hello")
+    server := udpServer{bindIp: "0.0.0.0", bindPort: 7000}
 
-        data, err := query(city)
-        if err != nil {
-            http.Error(w, err.Error(), http.StatusInternalServerError)
-            return
-        }
-
-        w.Header().Set("Content-Type", "application/json; charset=utf-8")
-        json.NewEncoder(w).Encode(data)
-    })
-    http.ListenAndServe(":7000", nil)
-}
-
-
-func hello(w http.ResponseWriter, r *http.Request) {
-    w.Write([]byte("hello"))
+    server.Start()
+    server.ServeForever()
+    log.Printf("Bye")
 }
