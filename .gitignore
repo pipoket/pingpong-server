@@ -25,3 +25,7 @@ _testmain.go
 
 # Executable
 pingpong-server
+
+# Vim artifacts
+*.swo
+*.swp

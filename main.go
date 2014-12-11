@@ -1,12 +1,16 @@
 package main
 
-import "net/http"
+import (
+    "encoding/json"
+    "net/http"
+    "strings"
+)
 
 
 type weatherData struct {
-    name string `json:"name"`
-    main struct {
-        kelvin float64 `json:"temp"`
+    Name string `json:"name"`
+    Main struct {
+        Kelvin float64 `json:"temp"`
     } `json:"main"`
 }
 
@@ -30,8 +34,20 @@ func query(city string) (weatherData, error) {
 
 
 func main() {
-    http.HandleFunc("/", hello)
-    http.ListenAndServe(":8080", nil)
+    http.HandleFunc("/hello", hello)
+    http.HandleFunc("/weather/", func(w http.ResponseWriter, r *http.Request) {
+        city := strings.SplitN(r.URL.Path, "/", 3)[2]
+
+        data, err := query(city)
+        if err != nil {
+            http.Error(w, err.Error(), http.StatusInternalServerError)
+            return
+        }
+
+        w.Header().Set("Content-Type", "application/json; charset=utf-8")
+        json.NewEncoder(w).Encode(data)
+    })
+    http.ListenAndServe(":7000", nil)
 }
 
 
